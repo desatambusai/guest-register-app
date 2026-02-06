@@ -89,84 +89,64 @@
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwuHmo9Rxr581_12Q-2ylxVRJFrm8jK8U8-AL-mDWoptKY0CIff7iRSyZTfZW0yi_gqXw/exec'; 
         // -------------------
 
-        const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const photoPreview = document.getElementById('photoPreview');
-const guestForm = document.getElementById('guestForm');
-let photoBase64 = '';
+        const form = document.getElementById('guestForm');
+        const webcamPreview = document.getElementById('webcam-preview');
+        const photoCanvas = document.getElementById('photo-canvas');
+        const takePhotoBtn = document.getElementById('take-photo');
+        const toggleCameraBtn = document.getElementById('toggle-camera');
+        const photoBase64Input = document.getElementById('photo-base64');
+        const submitBtn = form.querySelector('.submit-button');
+        const photoStatus = document.getElementById('photo-status');
+        const notification = document.getElementById('notification');
+        
+        let stream = null; // Untuk menyimpan stream kamera
 
-// 1. Fungsi Menyalakan Kamera
-async function startCamera() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        video.srcObject = stream;
-        video.style.display = 'block';
-    } catch (err) {
-        alert("Gagal mengakses kamera: " + err);
-    }
-}
-
-// 2. Fungsi Ambil Foto & Kompresi Otomatis
-function takePhoto() {
-    const context = canvas.getContext('2d');
-    
-    // Tentukan ukuran maksimal (800px) agar file tidak terlalu besar
-    const maxWidth = 800;
-    const scale = maxWidth / video.videoWidth;
-    canvas.width = maxWidth;
-    canvas.height = video.videoHeight * scale;
-
-    // Gambar foto dari video ke canvas dengan ukuran baru
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Ubah ke Base64 dengan kualitas 0.7 (70%) - Keseimbangan terbaik antara jelas & ringan
-    photoBase64 = canvas.toDataURL('image/jpeg', 0.7);
-    
-    // Tampilkan pratinjau
-    photoPreview.src = photoBase64;
-    photoPreview.style.display = 'block';
-}
-
-// 3. Fungsi Kirim Data
-guestForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    if (!photoBase64) {
-        alert("Silakan ambil foto selfie terlebih dahulu!");
-        return;
-    }
-
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.innerText = "Sedang Mengirim...";
-
-    const formData = new FormData(guestForm);
-    const data = Object.fromEntries(formData.entries());
-    data['Foto Selfie'] = photoBase64;
-
-    try {
-        const response = await fetch(GAS_WEB_APP_URL, {
-            method: 'POST',
-            body: JSON.stringify(data)
-        });
-
-        const result = await response.json();
-        if (result.status === 'success') {
-            alert("Data Berhasil Disimpan!");
-            guestForm.reset();
-            photoPreview.style.display = 'none';
-            photoBase64 = '';
-        } else {
-            alert("Gagal: " + result.message);
+        // 1. Logika Kamera
+        async function startCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            try {
+                // Akses kamera belakang (preferensi 'environment') atau kamera depan
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: {
+                        facingMode: 'user' // 'user' untuk kamera depan/selfie
+                    }, 
+                    audio: false 
+                });
+                webcamPreview.srcObject = stream;
+                webcamPreview.style.display = 'block';
+                webcamPreview.play();
+                takePhotoBtn.disabled = false;
+                toggleCameraBtn.textContent = 'Matikan Kamera';
+                photoStatus.textContent = 'Kamera aktif. Silakan berpose.';
+            } catch (err) {
+                console.error("Gagal mengakses kamera: ", err);
+                photoStatus.textContent = `❌ Gagal mengakses kamera. Pastikan izin diberikan. Error: ${err.name}`;
+                takePhotoBtn.disabled = true;
+                webcamPreview.style.display = 'none';
+            }
         }
-    } catch (err) {
-        console.error(err);
-        alert("Terjadi kesalahan saat mengirim data. Pastikan URL Web App sudah benar.");
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerText = "Kirim Data";
-    }
-});
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+                webcamPreview.srcObject = null;
+                webcamPreview.style.display = 'none';
+                takePhotoBtn.disabled = true;
+                toggleCameraBtn.textContent = 'Nyalakan Kamera';
+                photoStatus.textContent = 'Kamera nonaktif.';
+            }
+        }
+
+        toggleCameraBtn.addEventListener('click', () => {
+            if (stream) {
+                stopCamera();
+            } else {
+                startCamera();
+            }
+        });
 
         takePhotoBtn.addEventListener('click', () => {
             if (stream) {
